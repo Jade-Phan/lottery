@@ -1,3 +1,7 @@
+// Sources flattened with hardhat v2.12.3 https://hardhat.org
+
+// File contracts/Lottery.sol
+
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.2;
 
@@ -9,8 +13,9 @@ contract Lottery {
     }
 
     mapping (address => uint) public ticketHolders;
-    address[] public holders;
-
+    mapping (uint => address) public holders;
+    address[] public players;
+    address public owner;
     // Array of previous winners.
     // TODO: Only hold last 10 winners
     address[] public prevWinners;
@@ -30,9 +35,6 @@ contract Lottery {
     // Duration the lottery will be active for
     uint public lotteryDuration;
 
-    // Flag that the lottery is now over
-    bool public lotteryEnded;
-
     // Total Eth that has been won from users using the contract
     uint public totalEthWon;
 
@@ -46,17 +48,19 @@ contract Lottery {
     // Event for lottery reset
     event ResetLottery();
 
+    event NoWinner();
+
     //---------Modifiers---------------
 
     // Checks if still in lottery contribution period
     modifier lotteryOngoing() {
-        require(block.timestamp < lotteryStart + lotteryDuration);
+        require(block.timestamp < lotteryStart + lotteryDuration, "Not time");
         _;
     }
 
     // Checks if lottery has finished
     modifier lotteryFinished() {
-        require(block.timestamp > lotteryStart + lotteryDuration);
+        require(block.timestamp > lotteryStart + lotteryDuration,"Not finished");
         _;
     }
 
@@ -64,9 +68,10 @@ contract Lottery {
     
     //Create the lottery, each one lasts for 24 hours
     constructor() {
+        owner = msg.sender;
         ticketsIssued = 0;
         lotteryStart = block.timestamp;
-        lotteryDuration = 5 minutes;
+        lotteryDuration = 2 minutes;
     }
 
     // Fallback function calls buyTickets
@@ -75,9 +80,13 @@ contract Lottery {
 
     // Award users tickets for eth, 1 finney = 1 ticket
     function buyTickets(uint256 number) payable public lotteryOngoing returns (bool success) {
+        require(holders[number] == address(0), "Unavailable");
+        if (isExist(msg.sender)){
+            players.push(msg.sender);
+        }
         ticketHolders[msg.sender] = number;
         ticketsIssued += ticketHolders[msg.sender];
-        holders.push(msg.sender);
+        holders[number] = msg.sender;
         contractBalance += msg.value;
         emit TicketsBought(msg.sender, ticketHolders[msg.sender]);
         return true;
@@ -85,9 +94,8 @@ contract Lottery {
 
     // After winners have been declared and awarded, clear the arrays and reset the balances
     function resetLottery() internal lotteryFinished returns (bool success) {
-        lotteryEnded = false;
         lotteryStart = block.timestamp;
-        lotteryDuration = 24 hours;
+        lotteryDuration = 2 minutes;
         emit ResetLottery();
         return true;
     }
@@ -102,14 +110,19 @@ contract Lottery {
     }
 
     //Generate the winners by random using tickets bought as weight
-    function generateWinners() public lotteryFinished returns (uint winningTicket) {
+    function generateWinners() public lotteryFinished {
 
         //Need to make this truly random - This is temp solution for testing
         uint randNum = uint(block.number - 1) % ticketsIssued + 1;
-        winner = holders[randNum];
-        prevWinners.push(winner);
-        awardWinnings(winner);
-        return randNum;
+        if (holders[randNum] == address(0)) {
+            emit NoWinner();
+            resetLottery();
+        } else {
+            winner = holders[randNum];
+            prevWinners.push(winner);
+            awardWinnings(winner);
+        }
+        
     }
 
     function getTicketBalance(address _account) public view returns (uint balance) {
@@ -118,5 +131,14 @@ contract Lottery {
 
     function getBalance() public view returns (uint) {
         return address(this).balance;
+    }
+
+    function isExist(address player) internal view returns (bool) {
+        for (uint256 i = 0 ; i< players.length; ++i){
+            if (players[i] == player){
+                return false;
+            }
+        }
+        return true;
     }
 }

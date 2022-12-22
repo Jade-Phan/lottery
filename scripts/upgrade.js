@@ -8,7 +8,7 @@ async function main() {
   const LotteryFactoryV2 = await ethers.getContractFactory("LotteryUpgradeable");
   const lotteryV2 = await upgrades.upgradeProxy(contractProxy,LotteryFactoryV2);
 
-  console.log("Contract deployed to:", lottery.address);
+  console.log("Contract deployed to:", lotteryV2.address);
 
    const implAddress = await upgrades.erc1967.getImplementationAddress(
     contractProxy.address,
